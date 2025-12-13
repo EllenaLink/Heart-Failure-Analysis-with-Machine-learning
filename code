@@ -1,0 +1,485 @@
+'''
+Names: Qasim Pasha & Ellena Link
+Course: DS2500
+Assignment: Final Project
+Due Date: 12/10/25
+File Name: Link_Pasha_Final_Project_Code
+'''
+# Imports Relevant Libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy import stats
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import (classification_report, confusion_matrix,
+                             ConfusionMatrixDisplay, accuracy_score, f1_score)
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+# List of all numerical, categorical, and target features within the dataset
+target = "DEATH_EVENT"
+numerical_features = ["age", "creatinine_phosphokinase", "ejection_fraction",
+                      "platelets", "serum_creatinine", "serum_sodium", "time"]
+categorical_features = ["anaemia", "diabetes", "high_blood_pressure", "sex",
+                        "smoking"]
+all_features = numerical_features + categorical_features
+
+def load_data(filename):
+    """
+    Reads the heart failure patient data from the 
+    "heart_failure_clinical_records_dataset" CSV file into a dataframe and  
+    returns the uncleaned dataframe
+    
+    Args:
+    filename1 (str): Path to the CSV file containing patient medical records
+    
+    Returns:
+    df: a Dataframe containing:
+        - Patient death event, age, creatinine phosphokinase, ejection fraction,
+        platelets, serum creatinine, serum sodium, time, anaemia, diabetes, 
+        high blood pressure, sex, and smoking with uncleaned entries
+    """
+    try:
+        from google.colab import drive
+        drive.mount('/content/drive')
+        filepath = f"/content/drive/MyDrive/Ds 2500/{filename}"
+        df = pd.read_csv(filepath)
+        print("Loaded file from Google Drive.")
+    except:
+        filepath = filename
+        df = pd.read_csv(filepath)
+        print("Loaded file from local directory.")
+    return df
+
+def clean_data(df):
+    """
+    Analyzes the patient data and cleans the dataframe by removing any blank
+    entries and any observations that contained duplicate data. Returns the 
+    cleaned dataframe and the number of obsevations that were removed 
+     
+    Args:
+    df (dataframe): Dataframe containing cleaned patient data
+     
+    Returns:
+     df (Dataframe) containing:
+       - Patient death event, age, creatinine phosphokinase, ejection fraction,
+       platelets, serum creatinine, serum sodium, time, anaemia, diabetes, 
+       high blood pressure, sex, and smoking with no blank entries and no 
+       duplicate observations
+    """
+    before = len(df)
+    df = df.dropna(subset=all_features + [target])
+    after = len(df)
+    print(f"Cleaned data: dropped {before - after} rows of "
+          f"duplicates/empty observations")
+    for c in categorical_features + [target]:
+        df[c] = df[c].astype(int)
+    return df
+
+def dataset_overview(df):
+    """
+    Analyzes the patient data and prints an overview of the dataset, including
+    basic information, missing value count, descriptive statistics, and
+    information about the target variable "death_event"
+     
+    Args:
+    df (dataframe): Dataframe containing cleaned patient data
+     
+    Prints:
+     - Basic dataset information
+     - Missing value count
+     - Descriptive statistics for each feature
+     - Death_event distribution and percentage of mortality patients within the
+     set
+    """
+    print("Basic Dataset Information")
+    print(df.info())
+    print("\nMissing Values")
+    print(df.isna().sum())
+    print("\Basic Descriptive Statistics")
+    print(df.describe())
+    print("\nTarget Variable Distribution")
+    target_counts = round(df['DEATH_EVENT'].value_counts(normalize=True),2)
+    print(target_counts)
+    print(f"\nMortality Rate: {target_counts[1]*100}%")
+    print("\nCorrelation with Mortality")
+    correlations = df.corr()['DEATH_EVENT'].sort_values(ascending=False)
+    print(correlations)
+    
+def correlation_matrix(df, columns):
+    """
+    Analyzes the patient data and creates the correlation matrix of all of the
+    features within the cleaned dataframe
+
+    Args:
+    df (dataframe): Cleaned dataframe containing patient data
+    columns (list): List of all the feature headers, including "death_event"
+     
+    Returns:
+    correlation_matrix (dataframe): Correlation matrix showing correlations
+    between all of the features in the dataset
+    """
+    correlation = df[columns].corr()
+    return correlation
+
+def annotated_heatmap(correlation):
+    """
+    Analyzes the patient data and creates an annotated heatmap of the 
+    cleaned dataframe correlation matrix 
+
+    Args:
+    correlation (dataframe): Correlation matrix 
+     
+    Returns:
+    plt (matplotlib.figure): The plot that displays a heatmap of the 
+    correlation matrix of all of the features within the cleaned dataframe
+    """
+    fig, ax = plt.subplots(figsize=(10, 10))
+    im = ax.imshow(correlation.values, interpolation="nearest",cmap="coolwarm")
+    colorbar = fig.colorbar(im,ax = ax, fraction = 0.046, pad = 0.05)
+    ax.set_xticks(range(len(correlation.columns)), labels=correlation.columns,
+                  rotation=45, ha="right")
+    ax.set_yticks(range(len(correlation.columns)), labels=correlation.columns)
+    ax.set_title("Correlation Matrix")
+    for i in range(len(correlation.index)):
+        for j in range(len(correlation.columns)):
+            value = round(correlation.values[i,j],2)
+            ax.text(j,i, f"{value}", ha="center", va="center",color="w")
+    fig.tight_layout()
+    fig.tight_layout()
+    plt.show()
+    
+def chi_square_tests(df, categorical_features, target):
+    """
+    Analyzes the patient data and performs a chi-square test between the 
+    categorical features and the "death_event" feature and returns a summary
+    of the test results
+
+    Args:
+    df (dataframe): Cleaned dataframe containing patient data
+    categorical_features (list): List of all the categorical feature headers
+    target (string): The name of the target column that the chi-square test
+    will be done against
+     
+    Returns:
+    results_df (dataframe): Dataframe that contains the chi-square test
+    results, including the feature name, its chi-square statistic, its p-value,
+    and a boolean for if the feature is significant or not
+    """
+    print("Chi square tests for categorical features chi square tests")
+    results = []
+    for feature in categorical_features:
+        contingency_table = pd.crosstab(df[feature], df[target])
+        chi2,p_value,dof,expected = stats.chi2_contingency(contingency_table)
+        results.append({'Feature': feature,'Chi2': round(chi2,2),
+            'p_value': round(p_value,4),'Significant': p_value < 0.05})
+    results_df = pd.DataFrame(results)
+    print("\n")
+    print("Summary of chi square tests for α = 0.05")
+    print(results_df.to_string(index=False))
+    return results_df
+
+def chi_square_summary_plot(results_df):
+    """
+    Analyzes the chi-square test results and visualizes a summary of the 
+    results by plotting each feature as a bar and assigning it a color based
+    on if it is significant or not.
+
+    Args:
+    results_df (dataframe): Dataframe that contains the chi-square test
+    results, including the feature name, its chi-square statistic, its p-value,
+    and a boolean for if the feature is significant or not
+     
+    Returns:
+    plt (matplotlib.figure): The bar plot that displays the chi-square test 
+    results, with green bars representing significant features and red bars
+    representing not significant features, and displays each feature's 
+    chi-square statistic and p-value above the bar.
+    """
+    bar_height = 5  
+    results_df = results_df.sort_values(by=["Significant", "p_value"],
+        ascending=[False, True])
+    features = results_df["Feature"]
+    p_vals = round(results_df["p_value"],4)
+    chi_vals = round(results_df["Chi2"],2)
+    significance = results_df["Significant"]
+    colors = significance.map({True: "green", False: "red"})
+    x = np.arange(len(features))
+    plt.figure(figsize=(12, 6))
+    bars = plt.bar(x, [bar_height] * len(features), color=colors)
+    for i, bar in enumerate(bars):
+        plt.text(bar.get_x() + bar.get_width() / 2,bar_height + 0.2,
+            f"p={p_vals.iloc[i]}\nX²={chi_vals.iloc[i]}",ha="center", 
+            va="bottom",fontsize=10)
+    plt.bar(0, 0, color="green", label="Significant")
+    plt.bar(0, 0, color="red", label="Not Significant")
+    plt.legend()
+    plt.xticks(x, features)
+    plt.ylabel("Significance Indicator")
+    plt.title("Chi-Square Feature Significance for α = 0.05")
+    plt.ylim(0, bar_height + 2)
+    plt.tight_layout()
+    plt.show()
+
+def t_test(df, numerical_features, target):
+    """
+    Analyzes the patient data and performs a t-test between the numerical 
+    features and the "death_event" feature and returns a summary of the test 
+    results
+
+    Args:
+    df (dataframe): Cleaned dataframe containing patient data
+    numerical_features (list): List of all the numerical feature headers
+    target (string): The name of the target column that the t-test will be 
+    done against
+     
+    Returns:
+    results_df (dataframe): Dataframe that contains the t-test results, 
+    including the feature name, its t statistic, its p-value, and a boolean 
+    for if the feature is significant or not
+    """
+    print("\n")
+    print("T-tests for numerical features")
+    groups = df[target].unique()
+    g1, g2 = groups[0], groups[1]
+    results = []
+    for feature in numerical_features:
+        g1_values = df[df[target] == g1][feature]
+        g2_values = df[df[target] == g2][feature]
+        t_stat, p_value = stats.ttest_ind(g1_values,g2_values,equal_var=False)
+        results.append({"Feature": feature,"t_stat": round(t_stat, 2),
+                        "p_value": round(p_value, 4),
+                        "Significant": p_value < 0.05})
+    results_df = pd.DataFrame(results)
+    print("\n")
+    print("Summary of T-tests for α = 0.05")
+    print(results_df.to_string(index=False))
+    return results_df
+
+def t_test_summary_plot(results_df):
+    """
+    Analyzes the t-test results and visualizes a summary of the results by 
+    plotting each feature as a bar and assigning it a color based on if it is 
+    significant or not.
+
+    Args:
+    results_df (dataframe): Dataframe that contains the t-test results, 
+    including the feature name, its t statistic, its p-value, and a boolean 
+    for if the feature is significant or not
+     
+    Returns:
+    plt (matplotlib.figure): The bar plot that displays the t-test results, 
+    with green bars representing significant features and red bars representing 
+    not significant features, and displays each feature's t statistic and 
+    p-value above the bar.
+    """
+    bar_height = 5  
+    results_df = results_df.sort_values(by=["Significant", "p_value"],
+        ascending=[False, True])
+    features = results_df["Feature"]
+    p_vals = round(results_df["p_value"],4)
+    t_vals = round(results_df["t_stat"],2)
+    significance = results_df["Significant"]
+    colors = significance.map({True: "green", False: "red"})
+    x = np.arange(len(features))
+    plt.figure(figsize=(12, 6))
+    bars = plt.bar(x, [bar_height] * len(features), color=colors)
+    for i, bar in enumerate(bars):
+        plt.text(bar.get_x() + bar.get_width() / 2,bar_height + 0.2,
+            f"p={p_vals.iloc[i]}\nt={t_vals.iloc[i]}",ha="center", 
+            va="bottom",fontsize=10)
+    plt.bar(0, 0, color="green", label="Significant")
+    plt.bar(0, 0, color="red", label="Not Significant")
+    plt.legend()
+    plt.xticks(x, features)
+    plt.ylabel("Significance Indicator")
+    plt.title("T-test Feature Significance for α = 0.05")
+    plt.ylim(0, bar_height + 2)
+    plt.tight_layout()
+    plt.show()
+
+def knn_classification(X_train, X_test, y_train, y_test):
+    """
+    Analyzes the patient data and trains a K-Nearest Neighbors (KNN) Classifier
+    model that predicts patient mortality using speciifc medical features and 
+    determines the models accuracy and precision with a Classificaiton
+    Report. Also, visualizes the Confusion Matrix for k = 5.  
+    
+    Args:
+    X_train (dataframe): Cleaned features used for training
+    X_test (dataframe): Cleaned features used for testing
+    y_train (Pandas Series): Labels used for training
+    y_test (Pandas Series): Labels used for testing
+    
+    Returns:
+    knn (kNeighborsClassifier Object): The KNN classifier model that was 
+    trained to predict "death_event" from specific medical features
+    plt (matplotlib.figure): The plot that displays the confusion matrix that
+    compares the true and predicted mortality labels from the KNN classifier 
+    model
+    """
+    print("\n")
+    print("K-Nearest Neighbors Classification")
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+    knn = KNeighborsClassifier(n_neighbors=5)
+    knn.fit(X_train_scaled, y_train)
+    y_pred = knn.predict(X_test_scaled)
+    print(f"Test Accuracy: {round(accuracy_score(y_test, y_pred),4)}")
+    print(f"Test F1-Score: {round(f1_score(y_test, y_pred),4)}")
+    print("Classification Report:")
+    print(classification_report(y_test, y_pred))
+    plt.figure(figsize=(6, 5))
+    matrix = confusion_matrix(y_test, y_pred)
+    ConfusionMatrixDisplay(matrix).plot(cmap="cividis")
+    plt.title("KNN Confusion Matrix for k = 5")
+    plt.tight_layout()
+    plt.show()
+    return knn
+
+def logistic_regression(X_train, X_test, y_train, y_test):
+    """
+    Analyzes the patient data and trains a Logistic Regression model that 
+    predicts patient mortality using speciifc medical features and 
+    determines the models accuracy and precision with a Classificaiton
+    Report. Also, uses helper functions to visualize the Confusion Matrix 
+    and the coefficient values for each feature.
+    
+    Args:
+    X_train (dataframe): Cleaned features used for training
+    X_test (dataframe): Cleaned features used for testing
+    y_train (Pandas Series): Labels used for training
+    y_test (Pandas Series) Labels used for testing
+    
+    Returns:
+    lr_model (LogisticRegression Object): The logistic regression model that 
+    was trained to predict "death_event" from specific medical features
+    """
+    print("Logistic Regression")
+    lr_model = LogisticRegression(max_iter=10000)
+    lr_model.fit(X_train, y_train)
+    y_pred = lr_model.predict(X_test)
+    print(f"Accuracy: {round(accuracy_score(y_test, y_pred),4)}")
+    print(f"F1-Score: {round(f1_score(y_test, y_pred),4)}")
+    print("\nClassification Report:")
+    print(classification_report(y_test, y_pred))
+    feature_importance = pd.DataFrame({"feature": all_features,
+        'coefficient': lr_model.coef_[0]}).sort_values("coefficient", 
+                                                       ascending=False)
+    print("\nFeature Coefficients:")
+    print(feature_importance.to_string(index=False))
+    plot_logistic_coefficients(lr_model, all_features)
+    plot_logistic_confusion_matrix(lr_model, y_test, y_pred)
+    return lr_model
+
+def plot_logistic_coefficients(lr_model, feature_names):
+    """
+    Analyzes the patient data and visualizes the coefficient values from the 
+    trained logistic regression model using a horizontal bar/dot plot. Positive
+    coefficients are shown in blue, while negative coefficients are shown in
+    red 
+    
+    Args:
+    lr_model (LogisticRegression Object): The logistic regression model that 
+    was trained to predict "death_event" from specific medical features
+    feature_names (list): Names of the features used in the logistic regression
+    model
+    
+    Returns:
+    plt (matplotlib.figure): The plot that displays the horizontal dot plot 
+    that compares the coefficients from each feature used in the logistic
+    regression model
+    """
+    feature_importance = pd.DataFrame({'feature': feature_names,
+    'coefficient': lr_model.coef_[0]}).sort_values('coefficient', 
+                                                   ascending=True)
+    plt.figure(figsize=(7, 5))
+    y_pos = np.arange(len(feature_importance))
+    colors = ['red' if coef < 0 else 'blue' for coef 
+              in feature_importance['coefficient']]
+    plt.hlines(y=y_pos, xmin=0, xmax=feature_importance['coefficient'],
+               color=colors, alpha=0.8, linewidth=3)
+    plt.scatter(feature_importance['coefficient'], y_pos,color=colors, s=150,
+                edgecolors='black', alpha=0.9, linewidth=1.5)
+    plt.yticks(y_pos, feature_importance['feature'])
+    plt.xlabel("Coefficient Value")
+    plt.title("Logistic Regression Coefficients")
+    plt.axvline(x=0, color='black', alpha=0.6, linestyle='-')
+    plt.grid(axis='x', linestyle='--')
+    for i, coef in enumerate(feature_importance['coefficient']):
+        plt.text(coef + (0.067 if coef >= 0 else -0.067), i, f"{round(coef,3)}",
+                 ha="left" if coef>=0 else "right",va="center",
+                 bbox=dict(boxstyle="round,pad=0.3", facecolor="white", 
+                           alpha=0.8))
+    plt.xlim(-0.6,0.8)
+    plt.tight_layout()
+    plt.show()
+    return feature_importance
+
+def plot_logistic_confusion_matrix(lr_model, y_test, y_pred):
+    """
+    Creates a confusion matrix for the logistic regression model
+     
+    Args:
+    lr_model (LogisticRegression Object): The logistic regression model that 
+    was trained to predict "death_event" from specific medical features
+    y_test (Pandas Series): Actual "death_event" labels from the test set
+    y_pred (Pandas Series): Predicted "death_even" labels from the logistic 
+    regression model
+     
+    Returns:
+    plt (matplotlib.figure): The plot that displays the confusion matrix that
+    compares the true and predicted "death_event" labels from the logistic 
+    regression model
+    """
+    matrix = confusion_matrix(y_test, y_pred)
+    plt.figure(figsize=(6, 5))
+    ConfusionMatrixDisplay(matrix).plot(cmap="cividis")
+    plt.title("Logistic Regression Confusion Matrix")
+    plt.tight_layout()
+    plt.show()
+    return matrix
+
+def main():
+    """
+    Main function that executes functions to analyze heart failure patient data
+
+    Returns:
+    These results of the analysis are printed to the console:
+        - An overview of the summary of the cleaned dataframe
+        - A correlation matrix and an annotated heatmap of all of the clinical
+        features
+        - Splits the dataframe into a training and testing set for predictive
+        model use
+        - Logistic regression classification report, a dot plot of the feature 
+        coefficients, and a confusion matrix that compares the true and 
+        predicted mortality label
+        - KNN classification report and a confusion matrix that compares the 
+        true and predicted mortality label for k = 5
+        - Summary of Chi-square test results and a bar plot indicating feature
+        significance and relevant chi-square statistic and p-value
+        - Summary of t-test results and a bar plot indicating feature
+        significance and relevant t statistic and p-value
+    """
+    df = load_data("heart_failure_clinical_records_dataset.csv")
+    df = clean_data(df)
+    dataset_overview(df)
+    features = all_features.copy()
+    features.append(target)
+    corr = correlation_matrix(df, features)
+    annotated_heatmap(corr)
+    X = df[all_features]
+    y = df[target]
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.3, random_state=0, stratify=y)
+    lr_model = logistic_regression(X_train, X_test, y_train, y_test)
+    knn_model = knn_classification(X_train, X_test, y_train, y_test)
+    chi_results_df = chi_square_tests(df, categorical_features, target)
+    chi_square_summary_plot(chi_results_df)
+    t_results_df = t_test(df, numerical_features, target)
+    t_test_summary_plot(t_results_df)
+    
+if __name__ == "__main__":
+    main()
+
