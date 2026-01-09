@@ -1,2 +1,7 @@
 # Heart-Failure-Analysis-with-Machine-learning
-Used KNN, Logistic regression, chi square tests to determine which clinical features are associated with heart failure. Used data base from UCI,  code is organized to work with google colab 
+
+Analyzed a clinical dataset to identify predictors of heart failure morality
+• Built and evaluated Logistic Regression and K-Nearest Neighbors classifiers, achieved 82% accuracy
+• Conducted chi-square tests and t-tests to determine statistically significant correlations 
+• Identified key risk factors including serum creatinine, age and ejection fraction
+• Interpreted model coefficients and correlations to assess the clinical relevance of predictors and explain model behavior
